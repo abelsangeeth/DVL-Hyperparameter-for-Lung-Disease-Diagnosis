@@ -99,7 +99,7 @@ python -m dvlhg.cli synth            # stage 1: generate synthetic training rows
 python -m dvlhg.cli train            # stage 2: vision-language backbone
 python -m dvlhg.cli eval             # stage 3+4: hypergraph, ablation, report, export
 python -m dvlhg.cli verify-serving   # does the API reproduce the report?
-python -m dvlhg.cli serve            # stage 5: API + web app
+python -m dvlhg.cli serve            # stage 5: API + web app (all three panels)
 ```
 
 Every command takes `--config` and repeatable `--set key.sub=value`:
@@ -107,6 +107,25 @@ Every command takes `--config` and repeatable `--set key.sub=value`:
 ```bash
 python -m dvlhg.cli train --set train.batch_size=16 --set train.accum_steps=2
 ```
+
+## The demo app
+
+Three panels, each surfacing one of the model's headline components:
+
+| panel | what you can do | endpoint |
+|---|---|---|
+| **Grad-CAM** | click any of the four findings to see the heatmap for *that* finding; all four come back from a single forward pass | `POST /api/predict` |
+| **Diffusion** | generate a film from any label combination (guidance + DDIM steps are live controls), and SDEdit-refine your own upload at a chosen strength | `POST /api/generate`, `POST /api/refine` |
+| **Vision-language** | image-text alignment per finding as a diverging bar, plus the same film re-run with the report blanked so you can read off what the language channel actually contributes | `POST /api/predict` |
+
+Plus the modality gate, the report tokens the image attended to, and the nearest
+cases in the hypergraph.
+
+If the diffusion model in the bundle is undertrained, the panel says so and
+explains why every sample looks identical, rather than appearing broken — a
+freshly initialised UNet emits exactly zero by construction, so the sampler's
+trajectory depends only on its starting noise. `GET /api/capabilities` reports
+the measured `conditioning_strength` behind that warning.
 
 ## Three things this project takes seriously
 

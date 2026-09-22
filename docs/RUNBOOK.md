@@ -141,6 +141,43 @@ If it happens:
 
 If it still holds after three seeds, that is a result. Report it.
 
+### The diffusion panel says "not in this bundle"
+
+`export/diffusion.pt` is missing. Train one and re-export:
+
+```bash
+python -m dvlhg.cli diffusion
+python -m dvlhg.cli eval --set serve.include_diffusion=true
+```
+
+The exported checkpoint is EMA weights only (no optimiser state), so it is about
+a quarter the size of the training checkpoint.
+
+### Every generated film looks the same whatever labels I tick
+
+The diffusion model is undertrained, and the panel says so. A freshly
+initialised UNet emits **exactly zero** — every ResBlock's second convolution and
+the output convolution are zero-init by design — so the DDIM trajectory depends
+only on the starting noise and the label vector has no effect at all.
+
+`GET /api/capabilities` reports the measured `conditioning_strength`; below
+`1e-4` the panel shows the warning. Train longer (notebook 02); the numbers move
+once the residual branches leave zero.
+
+### Grad-CAM is missing from the response
+
+`grad_cam_multi` returns nothing when the backbone exposes no patch tokens.
+Check that `fusion.token_level` is `true` — the pooled-only fusion path has no
+spatial tokens to attribute to.
+
+### The vision-language panel's alignment numbers look small or negative
+
+Expected after fine-tuning. These are cosine similarities in the **fine-tuned**
+backbone's space, not stock BiomedCLIP's: once the towers are trained for
+classification they drift apart, and the prompts stop behaving like a zero-shot
+classifier. For the pretrained model's zero-shot ability, run
+`dvlhg check-vlm` before training instead.
+
 ### `verify-serving` fails
 
 The API is not reproducing the evaluated model. In likelihood order:

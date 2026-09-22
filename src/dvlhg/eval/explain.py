@@ -60,31 +60,79 @@ def grad_cam(
             return None, extras
         logit = out["logits"][0, class_index]
         grads = torch.autograd.grad(logit, tokens, retain_graph=False, allow_unused=True)[0]
-    if grads is None:
-        if was_training:
-            model.train()
-        return None, extras
+        heat = None if grads is None else _cam_from(tokens, grads, image.shape[-1])
 
+    if was_training:
+        model.train()
+    return heat, extras
+
+
+def grad_cam_multi(
+    model,
+    image: torch.Tensor,
+    input_ids: torch.Tensor,
+    attention_mask: torch.Tensor,
+    class_indices: Sequence[int],
+) -> Tuple[Dict[int, np.ndarray], Dict[str, torch.Tensor]]:
+    """Grad-CAM for several findings from a single forward pass.
+
+    One forward, then one backward per finding with `retain_graph=True`. Running
+    `grad_cam` four times instead would repeat the encoder four times, which is
+    the expensive half -- this costs roughly one forward plus three cheap
+    backwards.
+    """
+    was_training = model.training
+    model.eval()
+    maps: Dict[int, np.ndarray] = {}
+
+    with torch.enable_grad():
+        image = image.detach().clone().requires_grad_(True)
+        out = model(image, input_ids, attention_mask, return_extras=True)
+        extras = {
+            key: value.detach() if torch.is_tensor(value) else value
+            for key, value in out.get("extras", {}).items()
+        }
+        tokens = out.get("extras", {}).get("image_tokens")
+        if tokens is None:
+            if was_training:
+                model.train()
+            return maps, extras
+
+        indices = list(class_indices)
+        for position, class_index in enumerate(indices):
+            grads = torch.autograd.grad(
+                out["logits"][0, class_index],
+                tokens,
+                retain_graph=position < len(indices) - 1,
+                allow_unused=True,
+            )[0]
+            if grads is None:
+                continue
+            heat = _cam_from(tokens, grads, image.shape[-1])
+            if heat is not None:
+                maps[int(class_index)] = heat
+
+    if was_training:
+        model.train()
+    return maps, extras
+
+
+def _cam_from(tokens: torch.Tensor, grads: torch.Tensor, size: int) -> Optional[np.ndarray]:
+    """Weight patch activations by their mean gradient, reshape to the grid."""
     with torch.no_grad():
         weights = grads.mean(dim=1, keepdim=True)                 # [1, 1, d]
         cam = torch.relu((tokens * weights).sum(dim=-1))[0]        # [Ni]
         patches = cam[1:] if cam.numel() > 1 else cam              # drop CLS
         side = int(math.isqrt(patches.numel()))
         if side * side != patches.numel():
-            if was_training:
-                model.train()
-            return None, extras
-        grid = patches.view(1, 1, side, side)
-        size = image.shape[-1]
+            return None
         heat = torch.nn.functional.interpolate(
-            grid, size=(size, size), mode="bilinear", align_corners=False
+            patches.view(1, 1, side, side), size=(size, size),
+            mode="bilinear", align_corners=False,
         )[0, 0]
         heat = heat - heat.min()
         heat = heat / heat.max().clamp_min(1e-8)
-
-    if was_training:
-        model.train()
-    return heat.detach().float().cpu().numpy(), extras
+    return heat.detach().float().cpu().numpy()
 
 
 def text_importance(

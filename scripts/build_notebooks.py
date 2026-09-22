@@ -703,6 +703,16 @@ def nb_serve() -> dict:
 Runs the FastAPI service and the single-page frontend from inside Colab, exposed
 through a Cloudflare quick tunnel.
 
+The page has three panels beyond the predictions themselves:
+
+- **Grad-CAM** — click any finding to see the heatmap for *that* finding. All four
+  come back from one forward pass, so switching is instant.
+- **Diffusion** — generate a film from any label combination with live guidance and
+  DDIM-step controls, and SDEdit-refine your own upload. Needs `diffusion.pt` in
+  the bundle (notebook 02, then re-run `dvlhg eval`).
+- **Vision-language** — image-text alignment per finding, and the same film re-run
+  with the report blanked so you can read off what the language channel adds.
+
 **Anyone with that URL can reach your model.** It is a public tunnel with no
 authentication. Do not upload identifiable patient data, and stop the tunnel
 when you are finished.

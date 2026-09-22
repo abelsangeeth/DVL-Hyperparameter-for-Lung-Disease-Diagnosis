@@ -64,6 +64,24 @@ def get_predictor():
     return _predictor
 
 
+async def _read_image(upload: UploadFile) -> bytes:
+    """Validate and read an uploaded film. Shared by /predict and /refine."""
+    suffix = Path(upload.filename or "").suffix.lower()
+    if suffix and suffix not in ALLOWED_SUFFIXES:
+        raise HTTPException(
+            status_code=415,
+            detail=f"unsupported image type '{suffix}'; expected one of {sorted(ALLOWED_SUFFIXES)}",
+        )
+    data = await upload.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="empty upload")
+    if len(data) > MAX_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=413, detail=f"image larger than {MAX_UPLOAD_BYTES // (1024 * 1024)} MB"
+        )
+    return data
+
+
 def create_app(allow_origins=("*",)) -> FastAPI:
     app = FastAPI(
         title="DVL-HGN — chest X-ray finding support",
@@ -99,20 +117,7 @@ def create_app(allow_origins=("*",)) -> FastAPI:
         explain: bool = Form(True),
         neighbours: int = Form(6),
     ):
-        suffix = Path(image.filename or "").suffix.lower()
-        if suffix and suffix not in ALLOWED_SUFFIXES:
-            raise HTTPException(
-                status_code=415,
-                detail=f"unsupported image type '{suffix}'; expected one of {sorted(ALLOWED_SUFFIXES)}",
-            )
-        data = await image.read()
-        if not data:
-            raise HTTPException(status_code=400, detail="empty upload")
-        if len(data) > MAX_UPLOAD_BYTES:
-            raise HTTPException(
-                status_code=413, detail=f"image larger than {MAX_UPLOAD_BYTES // (1024 * 1024)} MB"
-            )
-
+        data = await _read_image(image)
         predictor = get_predictor()
         try:
             result = predictor.predict(
@@ -122,6 +127,70 @@ def create_app(allow_origins=("*",)) -> FastAPI:
             LOG.exception("prediction failed")
             raise HTTPException(status_code=400, detail=f"could not process this image: {exc}") from exc
         return JSONResponse(result)
+
+    @app.get("/api/capabilities")
+    def capabilities():
+        """What the UI may offer. Cheap enough to call on page load."""
+        predictor = get_predictor()
+        return {
+            "labels": LABELS,
+            "diffusion": predictor.diffusion_available(),
+            "diffusion_info": predictor.diffusion_info(),
+            "explain": True,
+            "vlm_panel": True,
+            "serving_variant": predictor.meta.get("serving_variant"),
+        }
+
+    @app.post("/api/generate")
+    def generate(
+        atelectasis: bool = Form(False),
+        cardiomegaly: bool = Form(False),
+        edema: bool = Form(False),
+        pleural_effusion: bool = Form(False),
+        guidance_scale: float = Form(2.0),
+        steps: int = Form(50),
+        seed: int = Form(-1),
+    ):
+        """Sample a synthetic film from the diffusion model."""
+        predictor = get_predictor()
+        labels = [float(atelectasis), float(cardiomegaly), float(edema), float(pleural_effusion)]
+        try:
+            return JSONResponse(
+                predictor.generate(
+                    labels,
+                    guidance_scale=max(1.0, min(float(guidance_scale), 8.0)),
+                    steps=max(5, min(int(steps), 250)),
+                    seed=None if int(seed) < 0 else int(seed),
+                )
+            )
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+        except Exception as exc:  # noqa: BLE001
+            LOG.exception("generation failed")
+            raise HTTPException(status_code=500, detail=f"generation failed: {exc}") from exc
+
+    @app.post("/api/refine")
+    async def refine(
+        image: UploadFile = File(...),
+        strength: float = Form(0.25),
+        steps: int = Form(20),
+    ):
+        """SDEdit-refine an uploaded film: noise partway, denoise back."""
+        data = await _read_image(image)
+        predictor = get_predictor()
+        try:
+            return JSONResponse(
+                predictor.refine(
+                    data,
+                    strength=max(0.02, min(float(strength), 0.95)),
+                    steps=max(5, min(int(steps), 100)),
+                )
+            )
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+        except Exception as exc:  # noqa: BLE001
+            LOG.exception("refinement failed")
+            raise HTTPException(status_code=500, detail=f"refinement failed: {exc}") from exc
 
     static_dir = frontend_dir()
     if static_dir is not None:

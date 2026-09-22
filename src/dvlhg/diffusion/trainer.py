@@ -188,6 +188,43 @@ def train_diffusion(
     return ckpt_path
 
 
+def export_slim(cfg: DotDict, out_path: Path) -> Optional[Path]:
+    """Write an EMA-weights-only diffusion checkpoint for serving.
+
+    The training checkpoint also carries the optimiser state and the raw
+    weights, which together are ~4x the size and are useless to the API.
+    """
+    ckpt_path = Path(cfg.paths.ckpt) / "diffusion.pt"
+    if not ckpt_path.exists():
+        return None
+    state = load_checkpoint(ckpt_path, map_location="cpu")
+    weights = state.get("ema", {}).get("shadow") or state["model"]
+    slim = {
+        "model": {key: value.to(torch.float32) for key, value in weights.items()},
+        "config": state.get("config", cfg.to_dict()),
+        "epoch": state.get("epoch"),
+        "from_ema": "ema" in state,
+    }
+    save_checkpoint(slim, out_path)
+    LOG.info("slim diffusion checkpoint -> %s (%.0f MB)",
+             out_path, out_path.stat().st_size / 1e6)
+    return out_path
+
+
+def load_diffusion_from(
+    path: str | os.PathLike, device: Optional[torch.device] = None
+) -> GaussianDiffusion:
+    """Load a diffusion model from an explicit checkpoint path (serving)."""
+    device = device or pick_device("auto")
+    state = load_checkpoint(path, map_location=device)
+    diffusion = build_diffusion(DotDict(state["config"]), device)
+    missing, unexpected = diffusion.model.load_state_dict(state["model"], strict=False)
+    if missing or unexpected:
+        LOG.warning("diffusion weights: missing=%s unexpected=%s", missing, unexpected)
+    diffusion.eval()
+    return diffusion
+
+
 def load_diffusion(
     cfg: DotDict, device: Optional[torch.device] = None, use_ema: bool = True
 ) -> GaussianDiffusion:

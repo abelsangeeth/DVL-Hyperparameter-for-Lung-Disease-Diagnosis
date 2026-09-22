@@ -177,5 +177,8 @@ serve:
   bundle: ""             # defaults to paths.export/bundle
   device: auto
   neighbours: 6          # similar cases shown in the UI
-  explain: true          # compute the Grad-CAM overlay
+  explain: true          # compute the Grad-CAM overlays (one per finding)
+  include_diffusion: true   # ship an EMA-only diffusion checkpoint in the
+                            # bundle so the demo can generate and refine films
+  vlm_panel: true        # image-text alignment + the image-only comparison
   allow_origins: ["*"]

@@ -449,6 +449,13 @@ def export_bundle(
         },
         out_dir / "bundle.json",
     )
+    if bool(cfg.serve.get("include_diffusion", True)):
+        from ..diffusion.trainer import export_slim
+
+        if export_slim(cfg, out_dir / "diffusion.pt") is None:
+            LOG.info("no diffusion checkpoint to export - the demo's generate/refine "
+                     "panel will be disabled")
+
     save_config(cfg, out_dir / "config.yaml")
     LOG.info("export bundle written to %s (%d bank nodes)", out_dir, len(bank_rows))
     return out_dir

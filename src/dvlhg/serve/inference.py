@@ -12,7 +12,7 @@ from __future__ import annotations
 import io
 import time
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 import pandas as pd
@@ -21,7 +21,13 @@ import torch
 from ..config import DotDict, load_config
 from ..constants import DISCLAIMER, LABELS
 from ..data.text import build_text, clean as clean_text, describe_mode
-from ..eval.explain import grad_cam, neighbour_records, overlay_heatmap, text_importance, to_png_base64
+from ..eval.explain import (
+    grad_cam_multi,
+    neighbour_records,
+    overlay_heatmap,
+    text_importance,
+    to_png_base64,
+)
 from ..hypergraph.construct import build_query_edges
 from ..models.dvlhgn import HypergraphClassifier
 from ..utils import get_logger, load_json, pick_device
@@ -114,6 +120,10 @@ class Predictor:
         self.cache_size = int(self.meta.get("cache_size", self.image_size))
         self.text_mode = str(self.meta.get("text_mode", "indication"))
         self.graph_config = dict(self.meta.get("graph_config", {}))
+        self._diffusion = None          # lazily loaded on first /api/generate
+        self._diffusion_missing = False
+        self._diffusion_probe: Optional[Dict[str, object]] = None
+        self._zero_shot_cache: Optional[torch.Tensor] = None
         self._warm_up()
         LOG.info(
             "predictor ready: %d bank nodes, backbone=%s, text mode=%s",
@@ -186,33 +196,56 @@ class Predictor:
     def _backbone_pass(self, image: torch.Tensor, input_ids, attention_mask):
         return self.backbone(image, input_ids, attention_mask)
 
-    def predict(
-        self,
-        image_bytes: bytes,
-        report: str = "",
-        explain: bool = True,
-        neighbours: Optional[int] = None,
-        report_is_prepared: bool = False,
-    ) -> Dict[str, object]:
-        started = time.perf_counter()
-        pil = self._decode_image(image_bytes)
-        image = preprocess_pil(pil, self.image_size, self.cache_size).to(self.device)
-        input_ids, attention_mask, prepared_text, token_strings = self._tokenise(
-            report, prepared_already=report_is_prepared
-        )
+    # -- vision-language panel --------------------------------------------- #
+    ZERO_SHOT_POSITIVE = "chest x-ray showing {}"
+    ZERO_SHOT_NEGATIVE = "chest x-ray with no {}"
 
+    def _zero_shot_embeddings(self) -> torch.Tensor:
+        """Normalised text embeddings for the 4 positive + 4 negative prompts.
+
+        Computed once. This is the *fine-tuned* backbone's space, not stock
+        BiomedCLIP's: after training the two towers have drifted, so these
+        similarities describe this model rather than the pretrained checkpoint.
+        """
+        if self._zero_shot_cache is not None:
+            return self._zero_shot_cache
+        prompts = (
+            [self.ZERO_SHOT_POSITIVE.format(name.lower()) for name in LABELS]
+            + [self.ZERO_SHOT_NEGATIVE.format(name.lower()) for name in LABELS]
+        )
+        tokens = self.tokenize(prompts)
+        with torch.no_grad():
+            _, pooled = self.backbone.vlm.encode_text(
+                tokens["input_ids"].to(self.device), tokens["attention_mask"].to(self.device)
+            )
+        self._zero_shot_cache = torch.nn.functional.normalize(pooled.float(), dim=-1)
+        return self._zero_shot_cache
+
+    def _zero_shot_scores(self, img_pooled: torch.Tensor) -> List[Dict[str, float]]:
+        text = self._zero_shot_embeddings()
+        image = torch.nn.functional.normalize(img_pooled.view(1, -1).float(), dim=-1)
+        similarity = (image @ text.T)[0].cpu().numpy()
+        n = len(LABELS)
+        return [
+            {
+                "label": name,
+                "positive": round(float(similarity[i]), 4),
+                "negative": round(float(similarity[i + n]), 4),
+                "margin": round(float(similarity[i] - similarity[i + n]), 4),
+            }
+            for i, name in enumerate(LABELS)
+        ]
+
+    def _full_pass(self, image: torch.Tensor, input_ids, attention_mask):
+        """Backbone + hypergraph for one (film, text) pair."""
         out = self._backbone_pass(image, input_ids, attention_mask)
         node = out["node"][0]
-        backbone_logits = out["logits"][0].float().cpu().numpy()
-
         query_edges = build_query_edges(
             fused_q=node,
             image_q=out["img_pooled"][0],
             text_q=out["txt_pooled"][0],
             bank=self.bank,
             graph_config=self.graph_config,
-            meta_q=None,
-            meta_index=None,
             centroids=self.centroids,
         )
         with torch.no_grad():
@@ -221,10 +254,184 @@ class Predictor:
                     node, out["logits"][0], query_edges, self.bank_states, self.bank_degrees
                 ).float().cpu().numpy()[0]
             )
+        backbone_logits = out["logits"][0].float().cpu().numpy()
+        use_hypergraph = self.meta.get("serving_variant") == "fusion_hypergraph"
+        logits = hypergraph_logits if use_hypergraph else backbone_logits
+        return out, query_edges, logits, backbone_logits
 
-        logits = hypergraph_logits if self.meta.get("serving_variant") == "fusion_hypergraph" else backbone_logits
-        probabilities = 1.0 / (1.0 + np.exp(-np.clip(logits / self.temperatures, -30, 30)))
-        backbone_probabilities = 1.0 / (1.0 + np.exp(-np.clip(backbone_logits / self.temperatures, -30, 30)))
+    def _probabilities(self, logits) -> "np.ndarray":
+        return 1.0 / (1.0 + np.exp(-np.clip(logits / self.temperatures, -30, 30)))
+
+    # -- diffusion panel ---------------------------------------------------- #
+    def diffusion_available(self) -> bool:
+        return (self.bundle_dir / "diffusion.pt").exists()
+
+    def _load_diffusion(self):
+        if self._diffusion is not None:
+            return self._diffusion
+        if self._diffusion_missing:
+            return None
+        path = self.bundle_dir / "diffusion.pt"
+        if not path.exists():
+            self._diffusion_missing = True
+            return None
+        from ..diffusion.trainer import load_diffusion_from
+
+        self._diffusion = load_diffusion_from(path, self.device)
+        LOG.info("diffusion model loaded for the demo panel")
+        return self._diffusion
+
+    def diffusion_info(self) -> Dict[str, object]:
+        """Whether the diffusion panel will actually do anything.
+
+        A freshly initialised UNet emits exactly zero (every residual branch and
+        the output projection are zero-init by design), so an undertrained model
+        returns the *same* film for every label vector. That looks like a broken
+        demo rather than an untrained one, so we measure it and say so:
+        `conditioning_strength` is the mean absolute difference between the
+        model's prediction under two different label vectors.
+        """
+        path = self.bundle_dir / "diffusion.pt"
+        if not path.exists():
+            return {"available": False}
+        if self._diffusion_probe is not None:
+            return self._diffusion_probe
+
+        diffusion = self._load_diffusion()
+        if diffusion is None:
+            return {"available": False}
+
+        size = int(self.cfg.diffusion.image_size)
+        generator = torch.Generator(device="cpu").manual_seed(0)
+        noise = torch.randn(1, 1, size, size, generator=generator).to(self.device)
+        step = torch.tensor([diffusion.timesteps // 2], device=self.device)
+        with torch.no_grad():
+            none_on = diffusion.model(noise, step, torch.zeros(1, len(LABELS), device=self.device))
+            all_on = diffusion.model(noise, step, torch.ones(1, len(LABELS), device=self.device))
+            strength = float((none_on - all_on).abs().mean())
+            magnitude = float(all_on.abs().mean())
+
+        state = torch.load(path, map_location="cpu", weights_only=False)
+        self._diffusion_probe = {
+            "available": True,
+            "image_size": size,
+            "epochs_trained": state.get("epoch"),
+            "from_ema": bool(state.get("from_ema", False)),
+            "conditioning_strength": round(strength, 6),
+            "output_magnitude": round(magnitude, 6),
+            # Below this the label vector moves the prediction less than the
+            # sampler's own rounding, so every sample comes back identical.
+            "usable": bool(strength > 1e-4),
+        }
+        return self._diffusion_probe
+
+    def generate(
+        self,
+        labels: Sequence[float],
+        guidance_scale: Optional[float] = None,
+        steps: Optional[int] = None,
+        seed: Optional[int] = None,
+    ) -> Dict[str, object]:
+        """Sample one synthetic film conditioned on a label vector."""
+        diffusion = self._load_diffusion()
+        if diffusion is None:
+            raise FileNotFoundError(
+                "no diffusion.pt in this bundle - train one with `dvlhg diffusion`, "
+                "then re-run `dvlhg eval` with serve.include_diffusion: true"
+            )
+        from ..diffusion.ddpm import to_image_space
+
+        started = time.perf_counter()
+        if seed is not None:
+            torch.manual_seed(int(seed))
+        size = int(self.cfg.diffusion.image_size)
+        resolved_steps = int(steps or self.cfg.diffusion.sample_steps)
+        resolved_guidance = float(
+            guidance_scale if guidance_scale is not None else self.cfg.diffusion.guidance_scale
+        )
+        vector = torch.tensor([[float(v) for v in labels]], dtype=torch.float32, device=self.device)
+        sample = diffusion.ddim_sample(
+            shape=(1, 1, size, size),
+            labels=vector,
+            steps=resolved_steps,
+            guidance_scale=resolved_guidance,
+            device=self.device,
+        )
+        array = to_image_space(sample)[0, 0].cpu().numpy()
+        return {
+            "png": to_png_base64(array),
+            "labels": {name: bool(float(v) > 0.5) for name, v in zip(LABELS, labels)},
+            "size": size,
+            "steps": resolved_steps,
+            "guidance_scale": resolved_guidance,
+            "latency_ms": round((time.perf_counter() - started) * 1000, 1),
+            "synthetic": True,
+            "conditioning": self.diffusion_info(),
+            "disclaimer": "Generated image. Not a real patient film.",
+        }
+
+    def refine(
+        self,
+        image_bytes: bytes,
+        strength: Optional[float] = None,
+        steps: int = 20,
+        labels: Optional[Sequence[float]] = None,
+    ) -> Dict[str, object]:
+        """SDEdit: noise the uploaded film partway down the schedule, denoise back."""
+        diffusion = self._load_diffusion()
+        if diffusion is None:
+            raise FileNotFoundError("no diffusion.pt in this bundle")
+        from ..diffusion.ddpm import to_image_space, to_model_space
+
+        started = time.perf_counter()
+        size = int(self.cfg.diffusion.image_size)
+        resolved_strength = float(
+            strength if strength is not None else self.cfg.diffusion.refine_t
+        )
+        pil = self._decode_image(image_bytes)
+        small = preprocess_pil(pil, size, size).to(self.device)
+
+        vector = None
+        if labels is not None:
+            vector = torch.tensor([[float(v) for v in labels]], dtype=torch.float32, device=self.device)
+        refined = diffusion.refine(
+            to_model_space(small), vector,
+            strength=resolved_strength,
+            steps=int(steps),
+            guidance_scale=1.0 if vector is None else float(self.cfg.diffusion.guidance_scale),
+        )
+        original = small[0, 0].cpu().numpy()
+        output = to_image_space(refined)[0, 0].cpu().numpy()
+        return {
+            "original_png": to_png_base64(original),
+            "refined_png": to_png_base64(output),
+            "difference_png": to_png_base64(np.clip(np.abs(output - original) * 3.0, 0, 1)),
+            "strength": resolved_strength,
+            "steps": int(steps),
+            "size": size,
+            "mean_abs_change": round(float(np.abs(output - original).mean()), 4),
+            "latency_ms": round((time.perf_counter() - started) * 1000, 1),
+        }
+
+    def predict(
+        self,
+        image_bytes: bytes,
+        report: str = "",
+        explain: bool = True,
+        neighbours: Optional[int] = None,
+        report_is_prepared: bool = False,
+        vlm_panel: bool = True,
+    ) -> Dict[str, object]:
+        started = time.perf_counter()
+        pil = self._decode_image(image_bytes)
+        image = preprocess_pil(pil, self.image_size, self.cache_size).to(self.device)
+        input_ids, attention_mask, prepared_text, token_strings = self._tokenise(
+            report, prepared_already=report_is_prepared
+        )
+
+        out, query_edges, logits, backbone_logits = self._full_pass(image, input_ids, attention_mask)
+        probabilities = self._probabilities(logits)
+        backbone_probabilities = self._probabilities(backbone_logits)
 
         findings = []
         for c, name in enumerate(LABELS):
@@ -248,6 +455,7 @@ class Predictor:
             "text_mode_description": describe_mode(self.text_mode),
             "modality_gate": round(float(out["gate"][0]), 4),
             "serving_variant": self.meta.get("serving_variant"),
+            "diffusion_available": self.diffusion_available(),
             "disclaimer": DISCLAIMER,
             "latency_ms": None,
         }
@@ -258,18 +466,49 @@ class Predictor:
                 query_edges.members[0], query_edges.similarities[0], self.bank_meta, limit=limit
             )
 
+        # ---- Grad-CAM for every finding, from one forward pass --------------
         if explain:
-            top = int(np.argmax(probabilities))
-            heat, extras = grad_cam(self.backbone, image, input_ids, attention_mask, top)
-            if heat is not None:
+            maps, extras = grad_cam_multi(
+                self.backbone, image, input_ids, attention_mask, range(len(LABELS))
+            )
+            if maps:
                 base = image[0, 0].detach().cpu().numpy()
                 response["saliency"] = {
-                    "label": LABELS[top],
-                    "overlay_png": to_png_base64(overlay_heatmap(base, heat)),
+                    LABELS[index]: to_png_base64(overlay_heatmap(base, heat))
+                    for index, heat in maps.items()
                 }
+                response["saliency_default"] = LABELS[int(np.argmax(probabilities))]
+                response["film_png"] = to_png_base64(base)
             important = text_importance(extras, token_strings)
             if important:
                 response["text_attention"] = important
+
+        # ---- vision-language panel ------------------------------------------
+        if vlm_panel:
+            panel: Dict[str, object] = {
+                "backend": self.meta.get("vlm_backend"),
+                "zero_shot": self._zero_shot_scores(out["img_pooled"][0]),
+                "gate": round(float(out["gate"][0]), 4),
+                "text_used": prepared_text,
+            }
+            # What does the report actually contribute? Re-run the whole path
+            # with the text blanked -- the same substitution training used for
+            # modality dropout -- and report the difference per finding.
+            blank_ids, blank_mask, _, _ = self._tokenise("", prepared_already=False)
+            _, _, blank_logits, _ = self._full_pass(image, blank_ids, blank_mask)
+            blank_probabilities = self._probabilities(blank_logits)
+            panel["image_only"] = [
+                {
+                    "label": name,
+                    "probability": round(float(blank_probabilities[c]), 4),
+                    "delta": round(float(probabilities[c] - blank_probabilities[c]), 4),
+                }
+                for c, name in enumerate(LABELS)
+            ]
+            panel["mean_abs_text_effect"] = round(
+                float(np.abs(probabilities - blank_probabilities).mean()), 4
+            )
+            response["vlm"] = panel
 
         response["latency_ms"] = round((time.perf_counter() - started) * 1000, 1)
         return response
@@ -284,6 +523,8 @@ class Predictor:
             "text_mode_description": describe_mode(self.text_mode),
             "thresholds": {name: round(float(t), 3) for name, t in zip(LABELS, self.thresholds)},
             "bank_nodes": int(self.bank["fused"].shape[0]),
+            "diffusion_available": self.diffusion_available(),
+            "image_size": self.image_size,
             "edge_groups": self.meta.get("edge_groups"),
             "test_metrics": self.meta.get("test_metrics"),
             "disclaimer": DISCLAIMER,

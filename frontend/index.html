@@ -14,36 +14,30 @@
     --ink: #0b0b0b;
     --ink-2: #52514e;
     --ink-3: #8a8880;
-    --accent: #2a78d6;
-    --accent-2: #eb6834;
+    --accent: #2a78d6;      /* categorical slot 1 */
+    --accent-2: #eb6834;    /* categorical slot 2 */
+    --pos: #2a78d6;         /* diverging: toward the finding */
+    --neg: #e34948;         /* diverging: away from it */
     --flag: #b3261e;
     --flag-bg: #fdeceb;
-    --ok: #0f6b3f;
     --radius: 12px;
     --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
       color-scheme: dark;
-      --surface: #1a1a19;
-      --surface-2: #232321;
-      --surface-3: #2d2d2a;
-      --border: #3a3a36;
-      --ink: #ffffff;
-      --ink-2: #c3c2b7;
-      --ink-3: #8f8e85;
-      --accent: #3987e5;
-      --accent-2: #d95926;
-      --flag: #f2b8b5;
-      --flag-bg: #3b1a17;
-      --ok: #7fd1a3;
+      --surface: #1a1a19; --surface-2: #232321; --surface-3: #2d2d2a; --border: #3a3a36;
+      --ink: #ffffff; --ink-2: #c3c2b7; --ink-3: #8f8e85;
+      --accent: #3987e5; --accent-2: #d95926; --pos: #3987e5; --neg: #e66767;
+      --flag: #f2b8b5; --flag-bg: #3b1a17;
     }
   }
   :root[data-theme="dark"] {
     color-scheme: dark;
     --surface: #1a1a19; --surface-2: #232321; --surface-3: #2d2d2a; --border: #3a3a36;
     --ink: #ffffff; --ink-2: #c3c2b7; --ink-3: #8f8e85;
-    --accent: #3987e5; --accent-2: #d95926; --flag: #f2b8b5; --flag-bg: #3b1a17; --ok: #7fd1a3;
+    --accent: #3987e5; --accent-2: #d95926; --pos: #3987e5; --neg: #e66767;
+    --flag: #f2b8b5; --flag-bg: #3b1a17;
   }
 
   * { box-sizing: border-box; }
@@ -52,7 +46,7 @@
     font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     -webkit-font-smoothing: antialiased;
   }
-  .wrap { max-width: 1120px; margin: 0 auto; padding: 24px 16px 72px; }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 24px 16px 72px; }
 
   header { display: flex; flex-wrap: wrap; gap: 12px; align-items: baseline; justify-content: space-between; }
   h1 { font-size: 20px; margin: 0; letter-spacing: -0.01em; }
@@ -68,15 +62,17 @@
   .banner strong { display: block; margin-bottom: 2px; }
 
   .grid { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 20px; align-items: start; }
-  @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
 
   .card {
     background: var(--surface-2); border: 1px solid var(--border);
     border-radius: var(--radius); padding: 16px;
   }
-  .card + .card { margin-top: 16px; }
+  .card + .card, .grid + .card { margin-top: 16px; }
   .card h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em;
-             color: var(--ink-3); margin: 0 0 12px; font-weight: 600; }
+             color: var(--ink-3); margin: 0 0 12px; font-weight: 600;
+             display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .card h2 .note { text-transform: none; letter-spacing: 0; font-weight: 400; font-size: 11.5px; }
 
   .drop {
     border: 1.5px dashed var(--border); border-radius: var(--radius);
@@ -85,7 +81,6 @@
   }
   .drop:hover, .drop.over { border-color: var(--accent); background: var(--surface-3); }
   .drop p { margin: 6px 0 0; color: var(--ink-3); font-size: 13px; }
-  .drop strong { font-size: 14px; }
   .preview { margin-top: 12px; display: none; }
   .preview img { width: 100%; border-radius: 8px; display: block; background: #000; }
   .preview .name { font-size: 12px; color: var(--ink-3); margin-top: 6px; word-break: break-all; }
@@ -93,11 +88,11 @@
   label.field { display: block; font-size: 12px; color: var(--ink-3); margin: 14px 0 6px; font-weight: 600;
                 text-transform: uppercase; letter-spacing: 0.05em; }
   textarea {
-    width: 100%; min-height: 128px; resize: vertical; padding: 10px 12px;
+    width: 100%; min-height: 120px; resize: vertical; padding: 10px 12px;
     border-radius: 8px; border: 1px solid var(--border);
     background: var(--surface); color: var(--ink); font: 13px/1.5 var(--mono);
   }
-  textarea:focus, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  textarea:focus, button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
   .hint { font-size: 12px; color: var(--ink-3); margin: 6px 0 0; }
 
   .row { display: flex; gap: 10px; align-items: center; margin-top: 14px; flex-wrap: wrap; }
@@ -106,11 +101,19 @@
     padding: 9px 16px; cursor: pointer; background: var(--accent); color: #fff;
   }
   button.ghost { background: transparent; color: var(--ink-2); border-color: var(--border); font-weight: 500; }
+  button.small { padding: 6px 12px; font-size: 13px; }
   button:disabled { opacity: .5; cursor: not-allowed; }
   .check { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink-2); }
+  input[type=range] { accent-color: var(--accent); flex: 1; min-width: 120px; }
+  input[type=number] { width: 68px; padding: 5px 7px; border-radius: 6px; border: 1px solid var(--border);
+                       background: var(--surface); color: var(--ink); font: 13px var(--mono); }
 
-  .finding { padding: 12px 0; border-bottom: 1px solid var(--border); }
+  /* ---- findings, clickable to drive the saliency view ---- */
+  .finding { padding: 11px 8px; border-bottom: 1px solid var(--border); border-radius: 8px;
+             cursor: pointer; transition: background .12s; }
   .finding:last-child { border-bottom: 0; }
+  .finding:hover { background: var(--surface-3); }
+  .finding.selected { background: var(--surface-3); box-shadow: inset 3px 0 0 var(--accent); }
   .finding .top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
   .finding .name { font-weight: 600; }
   .finding .pct { font-variant-numeric: tabular-nums; font-family: var(--mono); font-size: 15px; }
@@ -125,31 +128,71 @@
   .meter .thr { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--ink); opacity: .55; }
   .finding .meta { display: flex; justify-content: space-between; font-size: 11.5px; color: var(--ink-3); margin-top: 6px; }
 
-  .neighbours { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
-  .nb { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 9px 10px; font-size: 12px; }
-  .nb .sim { font-family: var(--mono); color: var(--accent); font-weight: 600; }
-  .nb .f { color: var(--ink-2); margin-top: 3px; }
-  .nb .badge { font-size: 10px; color: var(--ink-3); text-transform: uppercase; letter-spacing: .04em; }
+  /* ---- saliency ---- */
+  .saliency { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .saliency figure { margin: 0; }
+  .saliency img { width: 100%; border-radius: 8px; display: block; background: #000; }
+  .saliency figcaption { font-size: 11.5px; color: var(--ink-3); margin-top: 5px; }
+  .seg { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 10px; }
+  .seg button { background: var(--surface); color: var(--ink-2); border: 1px solid var(--border);
+                font-weight: 500; font-size: 12.5px; padding: 5px 10px; }
+  .seg button[aria-pressed="true"] { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+  /* ---- vision-language ---- */
+  .vl-row { display: grid; grid-template-columns: 124px 1fr 66px; gap: 8px; align-items: center;
+            padding: 5px 0; font-size: 13px; }
+  .vl-row .lab { color: var(--ink-2); }
+  .vl-row .val { font-family: var(--mono); font-size: 12px; text-align: right; color: var(--ink); }
+  .diverge { position: relative; height: 12px; background: var(--surface-3); border-radius: 3px; }
+  .diverge .mid { position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: var(--ink-3); opacity: .6; }
+  .diverge .fill { position: absolute; top: 2px; bottom: 2px; border-radius: 2px; }
+  .dumbbell { position: relative; height: 14px; }
+  .dumbbell .track { position: absolute; left: 0; right: 0; top: 6px; height: 2px; background: var(--surface-3); }
+  .dumbbell .link { position: absolute; top: 6px; height: 2px; background: var(--ink-3); opacity: .5; }
+  .dumbbell .pt { position: absolute; top: 3px; width: 8px; height: 8px; border-radius: 50%; margin-left: -4px;
+                  border: 2px solid var(--surface-2); }
+  .legend { display: flex; gap: 14px; font-size: 11.5px; color: var(--ink-3); margin: 2px 0 8px; flex-wrap: wrap; }
+  .legend i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; margin-right: 5px; vertical-align: -1px; }
+
+  /* ---- diffusion ---- */
+  .diff-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  @media (max-width: 820px) { .diff-grid { grid-template-columns: 1fr; } }
+  .diff-out { display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+  .diff-out figure { margin: 0; flex: 0 1 132px; max-width: 132px; }
+  .diff-out img { width: 100%; border-radius: 8px; display: block; background: #000;
+                  image-rendering: pixelated; }
+  .diff-out figcaption { font-size: 11px; color: var(--ink-3); margin-top: 4px; text-align: center; }
+  .labelbox { display: flex; flex-wrap: wrap; gap: 6px; }
+  .labelbox label { display: flex; align-items: center; gap: 5px; font-size: 12.5px; color: var(--ink-2);
+                    background: var(--surface); border: 1px solid var(--border); border-radius: 999px;
+                    padding: 4px 11px; cursor: pointer; }
+  .labelbox input:checked + span { color: var(--ink); font-weight: 600; }
+  .warn { font-size: 12px; color: var(--flag); background: var(--flag-bg); padding: 9px 11px;
+          border-radius: 8px; margin-top: 10px; line-height: 1.45; }
+  .slider-row { display: flex; align-items: center; gap: 10px; margin-top: 10px; font-size: 12.5px; color: var(--ink-2); }
+  .slider-row span.v { font-family: var(--mono); font-size: 12px; min-width: 34px; text-align: right; color: var(--ink); }
 
   .chips { display: flex; flex-wrap: wrap; gap: 6px; }
   .chip { font-family: var(--mono); font-size: 12px; padding: 3px 8px; border-radius: 6px;
           background: var(--surface-3); color: var(--ink-2); border: 1px solid var(--border); }
 
-  .saliency { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-  .saliency figure { margin: 0; }
-  .saliency img { width: 100%; border-radius: 8px; display: block; background: #000; }
-  .saliency figcaption { font-size: 11.5px; color: var(--ink-3); margin-top: 5px; }
+  .neighbours { display: grid; grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); gap: 8px; }
+  .nb { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 9px 10px; font-size: 12px; }
+  .nb .sim { font-family: var(--mono); color: var(--accent); font-weight: 600; }
+  .nb .f { color: var(--ink-2); margin-top: 3px; }
+  .nb .badge { font-size: 10px; color: var(--ink-3); text-transform: uppercase; letter-spacing: .04em; }
 
   table.card-table { width: 100%; border-collapse: collapse; font-size: 13px; }
   table.card-table th, table.card-table td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); }
   table.card-table th { color: var(--ink-3); font-weight: 600; font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em; }
   table.card-table td.num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
 
-  .empty { color: var(--ink-3); font-size: 13.5px; padding: 26px 4px; text-align: center; }
+  .empty { color: var(--ink-3); font-size: 13.5px; padding: 24px 4px; text-align: center; }
   .err { color: var(--flag); font-size: 13px; margin-top: 10px; }
   .spinner { width: 15px; height: 15px; border: 2px solid var(--border); border-top-color: var(--accent);
              border-radius: 50%; animation: spin .7s linear infinite; display: inline-block; vertical-align: -3px; }
   @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2s; } }
   ul.limits { margin: 8px 0 0 18px; padding: 0; color: var(--ink-2); font-size: 12.5px; }
   ul.limits li { margin-bottom: 4px; }
   footer { margin-top: 28px; font-size: 12px; color: var(--ink-3); }
@@ -173,7 +216,7 @@
   </div>
 
   <div class="grid">
-    <!-- ---------------------------------------------------------------- -->
+    <!-- ============================ left ============================ -->
     <div>
       <div class="card">
         <h2>Study</h2>
@@ -199,34 +242,56 @@
         <div class="err" id="error" hidden></div>
       </div>
 
-      <div class="card" id="cardCard">
+      <div class="card">
         <h2>Model card</h2>
         <div id="modelCard" class="empty">loading…</div>
       </div>
     </div>
 
-    <!-- ---------------------------------------------------------------- -->
+    <!-- ============================ right =========================== -->
     <div>
       <div class="card">
-        <h2>Predicted findings</h2>
+        <h2>Predicted findings <span class="note" id="findingsNote"></span></h2>
         <div id="findings" class="empty">Upload a film and press <strong>Analyse</strong>.</div>
         <div id="meta" class="hint" hidden></div>
       </div>
 
       <div class="card" id="saliencyCard" hidden>
-        <h2>Where the model looked</h2>
+        <h2>Grad-CAM <span class="note">click a finding, or pick one below</span></h2>
+        <div class="seg" id="salSeg"></div>
         <div class="saliency">
           <figure>
-            <img id="origImg" alt="Submitted radiograph">
-            <figcaption>submitted film</figcaption>
+            <img id="origImg" alt="Submitted radiograph as the model sees it">
+            <figcaption>film as the model sees it (224px)</figcaption>
           </figure>
           <figure>
-            <img id="camImg" alt="Saliency overlay">
+            <img id="camImg" alt="Grad-CAM overlay">
             <figcaption id="camCaption">saliency</figcaption>
           </figure>
         </div>
-        <p class="hint">Grad-CAM shows where evidence was drawn from, not whether that region was the right
-          one to use. Treat it as a debugging aid.</p>
+        <p class="hint">Grad-CAM shows where the evidence for the selected finding was drawn from —
+          not whether that region was the right one to use. A debugging aid, not validation.</p>
+      </div>
+
+      <div class="card" id="vlmCard" hidden>
+        <h2>Vision–language <span class="note" id="vlmBackend"></span></h2>
+
+        <p class="hint" style="margin-top:0">
+          <strong>Image↔text alignment.</strong> Cosine similarity of this film against
+          “chest x-ray showing X” minus “chest x-ray with no X”, in the fine-tuned backbone's
+          shared space. Right of centre = the film sits closer to the finding's description.
+        </p>
+        <div id="zeroShot"></div>
+
+        <p class="hint" style="margin-top:14px"><strong>What the report contributes.</strong>
+          The same film re-run with the report blanked — the substitution used for modality
+          dropout in training.</p>
+        <div class="legend">
+          <span><i style="background:var(--ink-3)"></i>image only</span>
+          <span><i style="background:var(--accent)"></i>image + report</span>
+        </div>
+        <div id="imageOnly"></div>
+        <p class="hint" id="gateLine"></p>
       </div>
 
       <div class="card" id="textCard" hidden>
@@ -244,8 +309,59 @@
     </div>
   </div>
 
+  <!-- ========================== diffusion ========================== -->
+  <div class="card" id="diffCard">
+    <h2>Diffusion model <span class="note" id="diffNote">checking…</span></h2>
+    <div id="diffWarn"></div>
+    <div class="diff-grid" id="diffBody" hidden>
+      <div>
+        <p class="hint" style="margin-top:0"><strong>Generate.</strong> Sample a film from the
+          label-conditional DDPM with classifier-free guidance. This is the augmentation source —
+          synthetic rows like these are added to the training split at a reduced loss weight.</p>
+        <div class="labelbox" id="genLabels"></div>
+        <div class="slider-row">
+          <label for="guidance" style="min-width:66px">guidance</label>
+          <input type="range" id="guidance" min="1" max="6" step="0.5" value="2.5">
+          <span class="v" id="guidanceV">2.5</span>
+        </div>
+        <div class="slider-row">
+          <label for="gsteps" style="min-width:66px">DDIM steps</label>
+          <input type="range" id="gsteps" min="10" max="100" step="5" value="50">
+          <span class="v" id="gstepsV">50</span>
+        </div>
+        <div class="row">
+          <button class="small" id="genBtn" type="button">Generate</button>
+          <label class="check"><input type="checkbox" id="fixSeed"> fixed seed</label>
+        </div>
+        <div class="diff-out" id="genOut"></div>
+      </div>
+
+      <div>
+        <p class="hint" style="margin-top:0"><strong>Refine (SDEdit).</strong> Noise your uploaded
+          film to a fraction of the schedule and denoise it back. Anatomy survives; texture and
+          acquisition characteristics change — a learned augmentation that respects the image prior.</p>
+        <div class="slider-row">
+          <label for="strength" style="min-width:66px">strength</label>
+          <input type="range" id="strength" min="0.05" max="0.8" step="0.05" value="0.25">
+          <span class="v" id="strengthV">0.25</span>
+        </div>
+        <div class="slider-row">
+          <label for="rsteps" style="min-width:66px">DDIM steps</label>
+          <input type="range" id="rsteps" min="5" max="60" step="5" value="20">
+          <span class="v" id="rstepsV">20</span>
+        </div>
+        <div class="row">
+          <button class="small" id="refBtn" type="button" disabled>Refine my upload</button>
+        </div>
+        <div class="diff-out" id="refOut"></div>
+      </div>
+    </div>
+  </div>
+
   <footer>
-    API: <code>POST /api/predict</code> · <code>GET /api/model-card</code> · <code>GET /api/health</code>
+    API: <code>POST /api/predict</code> · <code>POST /api/generate</code> ·
+    <code>POST /api/refine</code> · <code>GET /api/capabilities</code> ·
+    <code>GET /api/model-card</code> · <code>GET /api/health</code>
   </footer>
 </div>
 
@@ -253,9 +369,9 @@
 (() => {
   "use strict";
   const $ = (id) => document.getElementById(id);
-  let selectedFile = null;
+  const state = { file: null, result: null, labels: [], selected: null };
 
-  // ---- theme ------------------------------------------------------------
+  // ---------------------------------------------------------------- theme --
   const stored = (() => { try { return localStorage.getItem("dvlhg-theme"); } catch { return null; } })();
   if (stored) document.documentElement.setAttribute("data-theme", stored);
   $("theme").addEventListener("click", () => {
@@ -265,34 +381,9 @@
     try { localStorage.setItem("dvlhg-theme", next); } catch { /* private mode */ }
   });
 
-  // ---- file selection ---------------------------------------------------
-  const drop = $("drop");
-  const accept = (file) => {
-    if (!file || !file.type.startsWith("image/")) { showError("That file is not an image."); return; }
-    selectedFile = file;
-    $("previewImg").src = URL.createObjectURL(file);
-    $("previewName").textContent = `${file.name} · ${(file.size / 1024).toFixed(0)} KB`;
-    $("preview").style.display = "block";
-    $("run").disabled = false;
-    showError(null);
-  };
-  drop.addEventListener("click", () => $("file").click());
-  drop.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); $("file").click(); } });
-  $("file").addEventListener("change", (e) => accept(e.target.files[0]));
-  ["dragenter", "dragover"].forEach((t) => drop.addEventListener(t, (e) => { e.preventDefault(); drop.classList.add("over"); }));
-  ["dragleave", "drop"].forEach((t) => drop.addEventListener(t, (e) => { e.preventDefault(); drop.classList.remove("over"); }));
-  drop.addEventListener("drop", (e) => accept(e.dataTransfer.files[0]));
-
-  $("clear").addEventListener("click", () => {
-    selectedFile = null;
-    $("file").value = ""; $("report").value = "";
-    $("preview").style.display = "none"; $("run").disabled = true;
-    $("findings").className = "empty";
-    $("findings").innerHTML = "Upload a film and press <strong>Analyse</strong>.";
-    $("meta").hidden = true;
-    ["saliencyCard", "textCard", "nbCard"].forEach((id) => { $(id).hidden = true; });
-    showError(null);
-  });
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const pct = (x) => `${(x * 100).toFixed(1)}%`;
 
   function showError(message) {
     const box = $("error");
@@ -300,17 +391,53 @@
     box.textContent = message || "";
   }
 
-  // ---- analyse ----------------------------------------------------------
+  // ----------------------------------------------------------- file input --
+  const drop = $("drop");
+  const accept = (file) => {
+    if (!file || !file.type.startsWith("image/")) { showError("That file is not an image."); return; }
+    state.file = file;
+    $("previewImg").src = URL.createObjectURL(file);
+    $("previewName").textContent = `${file.name} · ${(file.size / 1024).toFixed(0)} KB`;
+    $("preview").style.display = "block";
+    $("run").disabled = false;
+    if (!$("diffBody").hidden) $("refBtn").disabled = false;
+    showError(null);
+  };
+  drop.addEventListener("click", () => $("file").click());
+  drop.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); $("file").click(); }
+  });
+  $("file").addEventListener("change", (e) => accept(e.target.files[0]));
+  ["dragenter", "dragover"].forEach((t) =>
+    drop.addEventListener(t, (e) => { e.preventDefault(); drop.classList.add("over"); }));
+  ["dragleave", "drop"].forEach((t) =>
+    drop.addEventListener(t, (e) => { e.preventDefault(); drop.classList.remove("over"); }));
+  drop.addEventListener("drop", (e) => accept(e.dataTransfer.files[0]));
+
+  $("clear").addEventListener("click", () => {
+    state.file = null; state.result = null; state.selected = null;
+    $("file").value = ""; $("report").value = "";
+    $("preview").style.display = "none";
+    $("run").disabled = true; $("refBtn").disabled = true;
+    $("findings").className = "empty";
+    $("findings").innerHTML = "Upload a film and press <strong>Analyse</strong>.";
+    $("meta").hidden = true; $("findingsNote").textContent = "";
+    ["saliencyCard", "vlmCard", "textCard", "nbCard"].forEach((id) => { $(id).hidden = true; });
+    $("refOut").innerHTML = "";
+    showError(null);
+  });
+
+  // -------------------------------------------------------------- analyse --
   $("run").addEventListener("click", async () => {
-    if (!selectedFile) return;
+    if (!state.file) return;
     const button = $("run");
-    button.disabled = true;
     const label = button.textContent;
+    button.disabled = true;
     button.innerHTML = '<span class="spinner"></span> analysing';
     showError(null);
 
     const body = new FormData();
-    body.append("image", selectedFile);
+    body.append("image", state.file);
     body.append("report", $("report").value || "");
     body.append("explain", $("explain").checked ? "true" : "false");
     body.append("neighbours", "6");
@@ -319,6 +446,7 @@
       const response = await fetch("/api/predict", { method: "POST", body });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.detail || `HTTP ${response.status}`);
+      state.result = payload;
       render(payload);
     } catch (err) {
       showError(String(err.message || err));
@@ -328,28 +456,39 @@
     }
   });
 
-  const pct = (x) => `${(x * 100).toFixed(1)}%`;
-
   function render(data) {
-    // findings
+    renderFindings(data);
+    renderSaliency(data);
+    renderVlm(data.vlm);
+    renderTokens(data);
+    renderNeighbours(data);
+
+    $("meta").hidden = false;
+    $("meta").innerHTML =
+      `served variant <code>${esc(data.serving_variant)}</code> · ${data.latency_ms} ms · ` +
+      `text mode <code>${esc(data.text_mode)}</code>`;
+  }
+
+  // -------------------------------------------------------------- findings --
+  function renderFindings(data) {
     const host = $("findings");
     host.className = "";
     host.innerHTML = data.findings.map((f) => {
-      const flagged = f.flagged;
       const delta = f.probability - f.without_hypergraph;
       const arrow = Math.abs(delta) < 0.005 ? "" :
         `<span title="change contributed by the hypergraph step">${delta > 0 ? "▲" : "▼"} ${pct(Math.abs(delta))}</span>`;
       return `
-        <div class="finding">
+        <div class="finding" data-label="${esc(f.label)}" role="button" tabindex="0"
+             aria-label="Show Grad-CAM for ${esc(f.label)}">
           <div class="top">
-            <span class="name">${f.label}</span>
+            <span class="name">${esc(f.label)}</span>
             <span>
               <span class="pct">${pct(f.probability)}</span>
-              <span class="tag ${flagged ? "flag" : "clear"}">${flagged ? "above threshold" : "below threshold"}</span>
+              <span class="tag ${f.flagged ? "flag" : "clear"}">${f.flagged ? "above threshold" : "below threshold"}</span>
             </span>
           </div>
           <div class="meter">
-            <div class="bar ${flagged ? "flag" : ""}" style="width:${Math.max(f.probability * 100, 1.2)}%"></div>
+            <div class="bar ${f.flagged ? "flag" : ""}" style="width:${Math.max(f.probability * 100, 1.2)}%"></div>
             <div class="thr" style="left:${f.threshold * 100}%" title="operating threshold ${f.threshold}"></div>
           </div>
           <div class="meta">
@@ -359,56 +498,243 @@
         </div>`;
     }).join("");
 
-    const gate = data.modality_gate;
-    $("meta").hidden = false;
-    $("meta").innerHTML =
-      `served variant <code>${data.serving_variant}</code> · ${data.latency_ms} ms · ` +
-      `modality gate ${gate.toFixed(2)} (1 = leaning on the film, 0 = on the report) · ` +
-      `text mode <code>${data.text_mode}</code>`;
+    host.querySelectorAll(".finding").forEach((el) => {
+      const pick = () => selectFinding(el.dataset.label);
+      el.addEventListener("click", pick);
+      el.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(); }
+      });
+    });
+    $("findingsNote").textContent = "click a row for its heatmap";
+  }
 
-    // saliency
-    if (data.saliency) {
-      $("saliencyCard").hidden = false;
-      $("origImg").src = URL.createObjectURL(selectedFile);
-      $("camImg").src = data.saliency.overlay_png;
-      $("camCaption").textContent = `saliency for ${data.saliency.label}`;
-    } else { $("saliencyCard").hidden = true; }
+  // -------------------------------------------------------------- saliency --
+  function renderSaliency(data) {
+    const maps = data.saliency;
+    if (!maps || !Object.keys(maps).length) { $("saliencyCard").hidden = true; return; }
+    $("saliencyCard").hidden = false;
+    $("origImg").src = data.film_png || URL.createObjectURL(state.file);
 
-    // text attention
+    $("salSeg").innerHTML = Object.keys(maps).map((name) =>
+      `<button type="button" data-label="${esc(name)}" aria-pressed="false">${esc(name)}</button>`).join("");
+    $("salSeg").querySelectorAll("button").forEach((b) =>
+      b.addEventListener("click", () => selectFinding(b.dataset.label)));
+
+    selectFinding(data.saliency_default || Object.keys(maps)[0]);
+  }
+
+  function selectFinding(label) {
+    const data = state.result;
+    if (!data || !data.saliency || !data.saliency[label]) return;
+    state.selected = label;
+    $("camImg").src = data.saliency[label];
+    const finding = (data.findings || []).find((f) => f.label === label);
+    $("camCaption").textContent = finding
+      ? `evidence for ${label} — ${pct(finding.probability)}`
+      : `evidence for ${label}`;
+    $("salSeg").querySelectorAll("button").forEach((b) =>
+      b.setAttribute("aria-pressed", String(b.dataset.label === label)));
+    document.querySelectorAll(".finding").forEach((el) =>
+      el.classList.toggle("selected", el.dataset.label === label));
+  }
+
+  // ------------------------------------------------------- vision-language --
+  function renderVlm(vlm) {
+    if (!vlm) { $("vlmCard").hidden = true; return; }
+    $("vlmCard").hidden = false;
+    $("vlmBackend").textContent = `backbone: ${vlm.backend || "unknown"}`;
+
+    // Diverging bars: two hues either side of a neutral midpoint, scaled by the
+    // largest magnitude on screen so the comparison is within-case.
+    const scale = Math.max(...vlm.zero_shot.map((z) => Math.abs(z.margin)), 1e-6);
+    $("zeroShot").innerHTML = vlm.zero_shot.map((z) => {
+      const frac = Math.min(Math.abs(z.margin) / scale, 1) * 50;
+      const positive = z.margin >= 0;
+      const style = positive
+        ? `left:50%;width:${frac}%;background:var(--pos)`
+        : `right:50%;width:${frac}%;background:var(--neg)`;
+      return `
+        <div class="vl-row">
+          <span class="lab">${esc(z.label)}</span>
+          <div class="diverge"><div class="mid"></div><div class="fill" style="${style}"></div></div>
+          <span class="val">${z.margin >= 0 ? "+" : ""}${z.margin.toFixed(3)}</span>
+        </div>`;
+    }).join("");
+
+    // Dumbbell: image-only vs image+report on a shared 0–100% axis.
+    const withReport = Object.fromEntries((state.result.findings || []).map((f) => [f.label, f.probability]));
+    $("imageOnly").innerHTML = vlm.image_only.map((row) => {
+      const a = Math.min(Math.max(row.probability, 0), 1) * 100;
+      const b = Math.min(Math.max(withReport[row.label] ?? row.probability, 0), 1) * 100;
+      const lo = Math.min(a, b), hi = Math.max(a, b);
+      const sign = row.delta >= 0 ? "+" : "";
+      return `
+        <div class="vl-row">
+          <span class="lab">${esc(row.label)}</span>
+          <div class="dumbbell">
+            <div class="track"></div>
+            <div class="link" style="left:${lo}%;width:${hi - lo}%"></div>
+            <div class="pt" style="left:${a}%;background:var(--ink-3)" title="image only ${pct(row.probability)}"></div>
+            <div class="pt" style="left:${b}%;background:var(--accent)" title="image + report ${pct(b / 100)}"></div>
+          </div>
+          <span class="val">${sign}${(row.delta * 100).toFixed(1)}pp</span>
+        </div>`;
+    }).join("");
+
+    const gate = vlm.gate;
+    $("gateLine").innerHTML =
+      `Modality gate <strong>${gate.toFixed(2)}</strong> (1 = leaning on the film, 0 = on the report) · ` +
+      `mean absolute effect of the report: <strong>${(vlm.mean_abs_text_effect * 100).toFixed(1)}pp</strong>`;
+  }
+
+  // ---------------------------------------------------------------- tokens --
+  function renderTokens(data) {
     if (data.text_attention && data.text_attention.length) {
       $("textCard").hidden = false;
       $("textChips").innerHTML = data.text_attention.map((t) =>
-        `<span class="chip" style="opacity:${0.45 + 0.55 * t.weight}">${escapeHtml(t.token)}</span>`).join("");
+        `<span class="chip" style="opacity:${0.45 + 0.55 * t.weight}">${esc(t.token)}</span>`).join("");
       $("textUsed").textContent = `Text actually used (${data.text_mode_description}): ${data.text_used}`;
     } else { $("textCard").hidden = true; }
+  }
 
-    // neighbours
+  function renderNeighbours(data) {
     if (data.neighbours && data.neighbours.length) {
       $("nbCard").hidden = false;
       $("neighbours").innerHTML = data.neighbours.map((n) => `
         <div class="nb">
           <span class="sim">${n.similarity.toFixed(3)}</span>
-          <span class="badge">${n.split}${n.synthetic ? " · synthetic" : ""}</span>
-          <div class="f">${n.findings.map(escapeHtml).join(", ")}</div>
+          <span class="badge">${esc(n.split)}${n.synthetic ? " · synthetic" : ""}</span>
+          <div class="f">${n.findings.map(esc).join(", ")}</div>
         </div>`).join("");
     } else { $("nbCard").hidden = true; }
   }
 
-  function escapeHtml(s) {
-    return String(s).replace(/[&<>"']/g, (c) =>
-      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  // ------------------------------------------------------------- diffusion --
+  [["guidance", "guidanceV"], ["gsteps", "gstepsV"], ["strength", "strengthV"], ["rsteps", "rstepsV"]]
+    .forEach(([input, out]) => {
+      const el = $(input);
+      const sync = () => { $(out).textContent = el.value; };
+      el.addEventListener("input", sync); sync();
+    });
+
+  async function setupDiffusion() {
+    let caps;
+    try {
+      const response = await fetch("/api/capabilities");
+      caps = await response.json();
+      if (!response.ok) throw new Error(caps.detail || "unavailable");
+    } catch (err) {
+      $("diffNote").textContent = "unavailable";
+      $("diffWarn").innerHTML = `<div class="warn">Could not reach the model: ${esc(err.message)}</div>`;
+      return;
+    }
+
+    state.labels = caps.labels || [];
+    $("genLabels").innerHTML = state.labels.map((name) => `
+      <label><input type="checkbox" data-label="${esc(name)}"><span>${esc(name)}</span></label>`).join("");
+
+    const info = caps.diffusion_info || {};
+    if (!caps.diffusion) {
+      $("diffNote").textContent = "not in this bundle";
+      $("diffWarn").innerHTML = `<div class="warn">
+        This bundle has no <code>diffusion.pt</code>. Train one with <code>dvlhg diffusion</code>
+        (notebook 02), then re-run <code>dvlhg eval</code> with
+        <code>serve.include_diffusion: true</code>.</div>`;
+      return;
+    }
+
+    $("diffBody").hidden = false;
+    $("refBtn").disabled = !state.file;
+    $("diffNote").textContent =
+      `${info.image_size}px · ${info.epochs_trained ?? "?"} epochs${info.from_ema ? " · EMA weights" : ""}`;
+
+    if (info.usable === false) {
+      $("diffWarn").innerHTML = `<div class="warn">
+        <strong>This diffusion model is undertrained.</strong> Its response to the label vector
+        measures ${Number(info.conditioning_strength).toExponential(1)}, which is effectively zero —
+        every residual branch is still near its zero initialisation, so <em>generation returns the
+        same film whatever you tick</em>. That is expected after ${info.epochs_trained ?? "a few"}
+        epoch(s); train longer (notebook 02) before reading anything into these samples.</div>`;
+    }
   }
 
-  // ---- model card -------------------------------------------------------
+  $("genBtn").addEventListener("click", async () => {
+    const button = $("genBtn");
+    const label = button.textContent;
+    button.disabled = true;
+    button.innerHTML = '<span class="spinner"></span> sampling';
+
+    const body = new FormData();
+    const key = { "Atelectasis": "atelectasis", "Cardiomegaly": "cardiomegaly",
+                  "Edema": "edema", "Pleural Effusion": "pleural_effusion" };
+    $("genLabels").querySelectorAll("input").forEach((box) => {
+      if (box.checked && key[box.dataset.label]) body.append(key[box.dataset.label], "true");
+    });
+    body.append("guidance_scale", $("guidance").value);
+    body.append("steps", $("gsteps").value);
+    body.append("seed", $("fixSeed").checked ? "7" : "-1");
+
+    try {
+      const response = await fetch("/api/generate", { method: "POST", body });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.detail || `HTTP ${response.status}`);
+      const on = Object.entries(payload.labels).filter(([, v]) => v).map(([k]) => k);
+      const caption = on.length ? on.join(" + ") : "no finding";
+      const figure = document.createElement("figure");
+      figure.innerHTML = `<img src="${payload.png}" alt="Synthetic ${caption}">
+        <figcaption>${esc(caption)}<br>${payload.latency_ms} ms</figcaption>`;
+      $("genOut").prepend(figure);
+      while ($("genOut").children.length > 4) $("genOut").lastElementChild.remove();
+    } catch (err) {
+      $("diffWarn").innerHTML = `<div class="warn">${esc(err.message)}</div>`;
+    } finally {
+      button.disabled = false;
+      button.textContent = label;
+    }
+  });
+
+  $("refBtn").addEventListener("click", async () => {
+    if (!state.file) return;
+    const button = $("refBtn");
+    const label = button.textContent;
+    button.disabled = true;
+    button.innerHTML = '<span class="spinner"></span> refining';
+
+    const body = new FormData();
+    body.append("image", state.file);
+    body.append("strength", $("strength").value);
+    body.append("steps", $("rsteps").value);
+
+    try {
+      const response = await fetch("/api/refine", { method: "POST", body });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.detail || `HTTP ${response.status}`);
+      $("refOut").innerHTML = `
+        <figure><img src="${payload.original_png}" alt="Original film">
+          <figcaption>original</figcaption></figure>
+        <figure><img src="${payload.refined_png}" alt="Refined film">
+          <figcaption>refined · t=${payload.strength}</figcaption></figure>
+        <figure><img src="${payload.difference_png}" alt="Absolute difference">
+          <figcaption>|difference| ×3</figcaption></figure>`;
+      $("diffWarn").innerHTML = `<p class="hint">mean absolute change
+        ${payload.mean_abs_change} · ${payload.latency_ms} ms</p>`;
+    } catch (err) {
+      $("diffWarn").innerHTML = `<div class="warn">${esc(err.message)}</div>`;
+    } finally {
+      button.disabled = false;
+      button.textContent = label;
+    }
+  });
+
+  // -------------------------------------------------------------- boot-up --
   (async () => {
     try {
       const response = await fetch("/api/model-card");
       const card = await response.json();
       if (!response.ok) throw new Error(card.detail || "unavailable");
-      const metrics = card.test_metrics || {};
-      const perClass = metrics.per_class || {};
+      const perClass = (card.test_metrics || {}).per_class || {};
       const rows = Object.keys(perClass).map((name) => `
-        <tr><td>${escapeHtml(name)}</td>
+        <tr><td>${esc(name)}</td>
             <td class="num">${perClass[name].auroc.toFixed(3)}</td>
             <td class="num">${perClass[name].f1.toFixed(3)}</td>
             <td class="num">${card.thresholds[name].toFixed(2)}</td></tr>`).join("");
@@ -419,17 +745,18 @@
           <tbody>${rows}</tbody>
         </table>
         <p class="hint" style="margin-top:10px">
-          ${escapeHtml(card.data_source)} · backbone <code>${escapeHtml(card.vlm_backend)}</code> ·
-          text <code>${escapeHtml(card.text_mode)}</code> · ${card.bank_nodes} bank nodes ·
-          serving <code>${escapeHtml(card.serving_variant)}</code>
+          ${esc(card.data_source)} · backbone <code>${esc(card.vlm_backend)}</code> ·
+          text <code>${esc(card.text_mode)}</code> · ${card.bank_nodes} bank nodes ·
+          serving <code>${esc(card.serving_variant)}</code>
         </p>
         <p class="hint" style="margin-top:10px"><strong>Known limitations</strong></p>
-        <ul class="limits">${card.known_limitations.map((l) => `<li>${escapeHtml(l)}</li>`).join("")}</ul>`;
+        <ul class="limits">${card.known_limitations.map((l) => `<li>${esc(l)}</li>`).join("")}</ul>`;
       $("textHint").textContent =
         `Paste the whole report — the server keeps only "${card.text_mode}" (${card.text_mode_description}).`;
     } catch (err) {
       $("modelCard").textContent = `Model card unavailable: ${err.message}`;
     }
+    setupDiffusion();
   })();
 })();
 </script>
