@@ -1,0 +1,181 @@
+# Diffusion-Augmented Vision-Language Hypergraph Network — default settings.
+# Override anything from the CLI:  --set train.epochs=15 --set data.subset_size=4000
+
+project: dvlhgn
+seed: 1337
+
+paths:
+  # On Colab set this to /content/drive/MyDrive/dvlhg so checkpoints survive a
+  # disconnect:  --set paths.root=/content/drive/MyDrive/dvlhg
+  root: ./runs
+  raw: raw               # downloaded dataset files (images + reports)
+  cache: cache           # 256px preprocessed images, tokenised text
+  manifest: manifest     # manifest.csv + split files
+  synth: synth           # diffusion-generated images
+  ckpt: checkpoints
+  logs: logs
+  reports: reports       # metrics json, figures, tables
+  export: export         # deployable bundle for the API
+
+data:
+  # mimic | openi | synthetic
+  #   mimic     - MIMIC-CXR-JPG v2.1.0 (PhysioNet credentialed access required)
+  #   openi     - Open-i / Indiana University CXR (public, no credentials, ~7.4k)
+  #   synthetic - procedurally generated films + templated reports (smoke tests)
+  source: mimic
+  mimic_root: ""         # local dir holding the MIMIC-CXR-JPG csv.gz files
+  image_size: 224
+  cache_size: 256        # images are cached at this size, cropped to image_size
+  views: frontal         # frontal | all
+  one_image_per_study: true
+  subset_size: 12000     # 0 = use everything. 12k frontal studies fits a Colab T4.
+  balance_subset: true   # oversample rare label combinations when subsetting
+  uncertain_policy: ignore   # ignore | ones | zeros | per_class
+  blank_policy: zeros    # zeros | ignore — how "finding never mentioned" is read
+  per_class_policy:      # used when uncertain_policy=per_class (CheXpert paper)
+    Atelectasis: ones
+    Cardiomegaly: zeros
+    Edema: ones
+    Pleural Effusion: ones
+  drop_unlabeled_rows: true   # rows where all 4 findings are "not mentioned"
+  num_workers: 2
+  val_fraction: 0.10     # only used when the source has no official split
+
+text:
+  # indication | findings | impression | findings_masked | full | full_masked | none
+  #
+  # DEFAULT IS `indication` ON PURPOSE. The CheXpert labels were produced by an
+  # NLP labeler reading FINDINGS/IMPRESSION, so feeding those sections back in
+  # leaks the target. `indication` uses only the pre-read sections (reason for
+  # exam, history, technique, comparison) — genuine clinical context a model
+  # would have before the film is read. See docs/LEAKAGE.md.
+  mode: indication
+  max_length: 256
+  lowercase: true
+  empty_placeholder: "chest radiograph, no clinical history provided."
+  # During training, blank the report this often so the model stays usable when
+  # the user supplies an image only.
+  modality_dropout: 0.15
+
+vlm:
+  # biomedclip | clip | dummy
+  backbone: biomedclip
+  hf_hub: "hf-hub:microsoft/BiomedCLIP-PubMedBERT_256-vit_base_patch16_224"
+  embed_dim: 512         # projection width of the backbone (BiomedCLIP = 512)
+  unfreeze_vision_blocks: 4   # last N transformer blocks trained; 0 = frozen
+  unfreeze_text_blocks: 2
+  train_vision_norm: true      # always train the final norms (cheap, big win)
+  grad_checkpointing: false    # turn on if you OOM on a T4 at batch 32
+
+fusion:
+  dim: 384               # working width of the fusion trunk
+  layers: 2              # bidirectional cross-attention blocks
+  heads: 6
+  dropout: 0.1
+  token_level: true      # false = fuse pooled embeddings only (faster, weaker)
+  max_image_tokens: 197  # ViT-B/16 @224 -> 1 cls + 196 patches
+  pool: attention        # attention | cls | mean
+
+hypergraph:
+  enabled: true
+  knn_fused: 10
+  knn_image: 8
+  knn_text: 8
+  use_meta_view: true
+  use_meta_demo: true
+  demo_age_bin: 10
+  use_proto_label: true     # train-only prototype hyperedges
+  proto_clusters: 24
+  layers: 2
+  hidden: 384
+  dropout: 0.3
+  edge_dropout: 0.1      # DropEdge: fraction of hyperedges muted each step
+  max_edge_size: 256     # attribute groups larger than this are split into chunks
+  proto_attach: 16       # bank nodes a query joins through its prototype edge
+  residual: true
+  learn_edge_weights: true
+  # Nodes from all splits take part in message passing (standard transductive
+  # HGNN). Only training-node *labels* are ever used. Set false for a strictly
+  # inductive graph built from training nodes alone.
+  transductive: true
+  # Inference for an unseen case: exact = append the node and re-propagate over
+  # the exported bank; approx = frozen-bank local propagation (faster).
+  inference_mode: exact
+  bank_size: 20000       # cap on exported neighbour-bank nodes
+
+diffusion:
+  enabled: true
+  image_size: 128        # samples are upsampled to data.image_size for the VLM
+  channels: 1
+  base_channels: 64
+  channel_mult: [1, 2, 3, 4]
+  attn_resolutions: [16]
+  num_res_blocks: 2
+  timesteps: 1000
+  schedule: cosine       # cosine | linear
+  objective: eps         # eps | v
+  cond_dropout: 0.1      # classifier-free guidance label dropout
+  guidance_scale: 2.0
+  sample_steps: 50       # DDIM steps
+  # How diffusion feeds the classifier:
+  #   synthesis - sample new films from label vectors, add as extra training rows
+  #   refine    - SDEdit: noise a real film to t=refine_t then denoise (aug/TTA)
+  use: [synthesis, refine]
+  synth_per_class: 500   # generated films per finding
+  synth_text: sample_train   # sample_train | placeholder — report paired with a sample
+  refine_t: 0.25         # fraction of the schedule used by SDEdit refinement
+  refine_prob: 0.25      # chance a training image is refined on the fly
+  train:
+    epochs: 30
+    batch_size: 32
+    lr: 0.0002
+    ema_decay: 0.999
+    grad_clip: 1.0
+    amp: true
+
+train:
+  epochs: 12
+  batch_size: 24
+  accum_steps: 1
+  lr: 0.0003             # head / fusion / hypergraph learning rate
+  encoder_lr_scale: 0.1  # backbone lr = lr * this
+  weight_decay: 0.05
+  warmup_ratio: 0.05
+  grad_clip: 1.0
+  amp: true
+  ema_decay: 0.0         # >0 enables EMA of the trainable weights
+  loss: asl              # bce | asl  (asymmetric loss, strong for multi-label)
+  asl_gamma_neg: 3.0
+  asl_gamma_pos: 0.0
+  asl_clip: 0.05
+  pos_weight: auto       # auto | none | [w1,w2,w3,w4]
+  label_smoothing: 0.0
+  early_stop_patience: 4
+  monitor: val/auroc_macro
+  save_every_epoch: true   # essential on Colab — lets you resume after a drop
+  use_synthetic: true      # include diffusion samples in the training split
+  synthetic_weight: 0.5    # loss weight applied to synthetic rows
+
+hgnn_train:
+  epochs: 300            # full-graph training is seconds per epoch
+  lr: 0.001
+  weight_decay: 0.0005
+  early_stop_patience: 40
+  monitor: val/auroc_macro
+
+eval:
+  bootstrap: 1000        # resamples for the 95% CI; 0 disables
+  threshold: f1          # f1 | youden | fixed
+  fixed_threshold: 0.5
+  calibrate: temperature # none | temperature
+  save_curves: true
+  inductive_samples: 64  # test studies used for the served-vs-evaluated check
+
+serve:
+  host: 127.0.0.1
+  port: 8000
+  bundle: ""             # defaults to paths.export/bundle
+  device: auto
+  neighbours: 6          # similar cases shown in the UI
+  explain: true          # compute the Grad-CAM overlay
+  allow_origins: ["*"]

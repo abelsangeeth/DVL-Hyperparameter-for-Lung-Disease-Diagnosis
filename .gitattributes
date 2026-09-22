@@ -1,0 +1,11 @@
+# Check everything out with LF: this repo is written on Windows and run on
+# Colab. Notebooks and binary assets are marked so Git never rewrites them.
+* text=auto eol=lf
+
+*.ipynb  text eol=lf
+*.png    binary
+*.jpg    binary
+*.zip    binary
+*.npy    binary
+*.npz    binary
+*.pt     binary

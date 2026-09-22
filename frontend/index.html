@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DVL-HGN Chest Film Review</title>
+<style>
+  :root {
+    color-scheme: light;
+    --surface: #fcfcfb;
+    --surface-2: #f4f3f0;
+    --surface-3: #ecebe7;
+    --border: #e1e0db;
+    --ink: #0b0b0b;
+    --ink-2: #52514e;
+    --ink-3: #8a8880;
+    --accent: #2a78d6;
+    --accent-2: #eb6834;
+    --flag: #b3261e;
+    --flag-bg: #fdeceb;
+    --ok: #0f6b3f;
+    --radius: 12px;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --surface: #1a1a19;
+      --surface-2: #232321;
+      --surface-3: #2d2d2a;
+      --border: #3a3a36;
+      --ink: #ffffff;
+      --ink-2: #c3c2b7;
+      --ink-3: #8f8e85;
+      --accent: #3987e5;
+      --accent-2: #d95926;
+      --flag: #f2b8b5;
+      --flag-bg: #3b1a17;
+      --ok: #7fd1a3;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --surface: #1a1a19; --surface-2: #232321; --surface-3: #2d2d2a; --border: #3a3a36;
+    --ink: #ffffff; --ink-2: #c3c2b7; --ink-3: #8f8e85;
+    --accent: #3987e5; --accent-2: #d95926; --flag: #f2b8b5; --flag-bg: #3b1a17; --ok: #7fd1a3;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--surface); color: var(--ink);
+    font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 24px 16px 72px; }
+
+  header { display: flex; flex-wrap: wrap; gap: 12px; align-items: baseline; justify-content: space-between; }
+  h1 { font-size: 20px; margin: 0; letter-spacing: -0.01em; }
+  h1 span { color: var(--ink-3); font-weight: 400; }
+  .sub { color: var(--ink-2); font-size: 13px; margin: 4px 0 0; }
+
+  .banner {
+    margin: 18px 0 24px; padding: 12px 14px; border-radius: var(--radius);
+    background: var(--flag-bg); color: var(--flag);
+    border: 1px solid color-mix(in srgb, var(--flag) 30%, transparent);
+    font-size: 13px; line-height: 1.5;
+  }
+  .banner strong { display: block; margin-bottom: 2px; }
+
+  .grid { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 20px; align-items: start; }
+  @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
+
+  .card {
+    background: var(--surface-2); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 16px;
+  }
+  .card + .card { margin-top: 16px; }
+  .card h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em;
+             color: var(--ink-3); margin: 0 0 12px; font-weight: 600; }
+
+  .drop {
+    border: 1.5px dashed var(--border); border-radius: var(--radius);
+    padding: 26px 16px; text-align: center; cursor: pointer;
+    transition: border-color .15s, background .15s; background: var(--surface);
+  }
+  .drop:hover, .drop.over { border-color: var(--accent); background: var(--surface-3); }
+  .drop p { margin: 6px 0 0; color: var(--ink-3); font-size: 13px; }
+  .drop strong { font-size: 14px; }
+  .preview { margin-top: 12px; display: none; }
+  .preview img { width: 100%; border-radius: 8px; display: block; background: #000; }
+  .preview .name { font-size: 12px; color: var(--ink-3); margin-top: 6px; word-break: break-all; }
+
+  label.field { display: block; font-size: 12px; color: var(--ink-3); margin: 14px 0 6px; font-weight: 600;
+                text-transform: uppercase; letter-spacing: 0.05em; }
+  textarea {
+    width: 100%; min-height: 128px; resize: vertical; padding: 10px 12px;
+    border-radius: 8px; border: 1px solid var(--border);
+    background: var(--surface); color: var(--ink); font: 13px/1.5 var(--mono);
+  }
+  textarea:focus, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .hint { font-size: 12px; color: var(--ink-3); margin: 6px 0 0; }
+
+  .row { display: flex; gap: 10px; align-items: center; margin-top: 14px; flex-wrap: wrap; }
+  button {
+    font: inherit; font-weight: 600; border-radius: 8px; border: 1px solid transparent;
+    padding: 9px 16px; cursor: pointer; background: var(--accent); color: #fff;
+  }
+  button.ghost { background: transparent; color: var(--ink-2); border-color: var(--border); font-weight: 500; }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  .check { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink-2); }
+
+  .finding { padding: 12px 0; border-bottom: 1px solid var(--border); }
+  .finding:last-child { border-bottom: 0; }
+  .finding .top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+  .finding .name { font-weight: 600; }
+  .finding .pct { font-variant-numeric: tabular-nums; font-family: var(--mono); font-size: 15px; }
+  .tag { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+         padding: 2px 7px; border-radius: 999px; white-space: nowrap; }
+  .tag.flag { background: var(--flag-bg); color: var(--flag); }
+  .tag.clear { background: var(--surface-3); color: var(--ink-3); }
+
+  .meter { position: relative; height: 8px; margin-top: 8px; border-radius: 999px; background: var(--surface-3); }
+  .meter .bar { position: absolute; inset: 0 auto 0 0; border-radius: 999px; background: var(--accent); }
+  .meter .bar.flag { background: var(--accent-2); }
+  .meter .thr { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--ink); opacity: .55; }
+  .finding .meta { display: flex; justify-content: space-between; font-size: 11.5px; color: var(--ink-3); margin-top: 6px; }
+
+  .neighbours { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+  .nb { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 9px 10px; font-size: 12px; }
+  .nb .sim { font-family: var(--mono); color: var(--accent); font-weight: 600; }
+  .nb .f { color: var(--ink-2); margin-top: 3px; }
+  .nb .badge { font-size: 10px; color: var(--ink-3); text-transform: uppercase; letter-spacing: .04em; }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { font-family: var(--mono); font-size: 12px; padding: 3px 8px; border-radius: 6px;
+          background: var(--surface-3); color: var(--ink-2); border: 1px solid var(--border); }
+
+  .saliency { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .saliency figure { margin: 0; }
+  .saliency img { width: 100%; border-radius: 8px; display: block; background: #000; }
+  .saliency figcaption { font-size: 11.5px; color: var(--ink-3); margin-top: 5px; }
+
+  table.card-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.card-table th, table.card-table td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+  table.card-table th { color: var(--ink-3); font-weight: 600; font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em; }
+  table.card-table td.num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+  .empty { color: var(--ink-3); font-size: 13.5px; padding: 26px 4px; text-align: center; }
+  .err { color: var(--flag); font-size: 13px; margin-top: 10px; }
+  .spinner { width: 15px; height: 15px; border: 2px solid var(--border); border-top-color: var(--accent);
+             border-radius: 50%; animation: spin .7s linear infinite; display: inline-block; vertical-align: -3px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  ul.limits { margin: 8px 0 0 18px; padding: 0; color: var(--ink-2); font-size: 12.5px; }
+  ul.limits li { margin-bottom: 4px; }
+  footer { margin-top: 28px; font-size: 12px; color: var(--ink-3); }
+  code { font-family: var(--mono); font-size: 12px; background: var(--surface-3); padding: 1px 5px; border-radius: 4px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>DVL-HGN <span>· chest film review</span></h1>
+      <p class="sub">Diffusion-augmented vision-language hypergraph network — Atelectasis, Cardiomegaly, Edema, Pleural Effusion</p>
+    </div>
+    <button class="ghost" id="theme" type="button">Toggle theme</button>
+  </header>
+
+  <div class="banner" role="alert">
+    <strong>Research prototype — not a medical device.</strong>
+    This model has not been clinically validated. It must not be used to diagnose, treat, or make
+    any decision about a patient. Do not upload identifiable patient data.
+  </div>
+
+  <div class="grid">
+    <!-- ---------------------------------------------------------------- -->
+    <div>
+      <div class="card">
+        <h2>Study</h2>
+        <div class="drop" id="drop" tabindex="0" role="button" aria-label="Choose a chest radiograph">
+          <strong>Drop a chest radiograph here</strong>
+          <p>or click to choose a file · PNG, JPG, TIFF · frontal view</p>
+        </div>
+        <input type="file" id="file" accept="image/*" hidden>
+        <div class="preview" id="preview">
+          <img id="previewImg" alt="Uploaded radiograph">
+          <div class="name" id="previewName"></div>
+        </div>
+
+        <label class="field" for="report">Radiology report <span style="text-transform:none;letter-spacing:0">(optional)</span></label>
+        <textarea id="report" spellcheck="false" placeholder="INDICATION:  ___ year old with shortness of breath // evaluate for fluid&#10;&#10;TECHNIQUE:  Portable AP chest&#10;&#10;COMPARISON:  None."></textarea>
+        <p class="hint" id="textHint">Paste the whole report — the server keeps only the sections the model was trained on.</p>
+
+        <div class="row">
+          <button id="run" type="button" disabled>Analyse</button>
+          <button class="ghost" id="clear" type="button">Clear</button>
+          <label class="check"><input type="checkbox" id="explain" checked> explanations</label>
+        </div>
+        <div class="err" id="error" hidden></div>
+      </div>
+
+      <div class="card" id="cardCard">
+        <h2>Model card</h2>
+        <div id="modelCard" class="empty">loading…</div>
+      </div>
+    </div>
+
+    <!-- ---------------------------------------------------------------- -->
+    <div>
+      <div class="card">
+        <h2>Predicted findings</h2>
+        <div id="findings" class="empty">Upload a film and press <strong>Analyse</strong>.</div>
+        <div id="meta" class="hint" hidden></div>
+      </div>
+
+      <div class="card" id="saliencyCard" hidden>
+        <h2>Where the model looked</h2>
+        <div class="saliency">
+          <figure>
+            <img id="origImg" alt="Submitted radiograph">
+            <figcaption>submitted film</figcaption>
+          </figure>
+          <figure>
+            <img id="camImg" alt="Saliency overlay">
+            <figcaption id="camCaption">saliency</figcaption>
+          </figure>
+        </div>
+        <p class="hint">Grad-CAM shows where evidence was drawn from, not whether that region was the right
+          one to use. Treat it as a debugging aid.</p>
+      </div>
+
+      <div class="card" id="textCard" hidden>
+        <h2>Report tokens the image attended to</h2>
+        <div class="chips" id="textChips"></div>
+        <p class="hint" id="textUsed"></p>
+      </div>
+
+      <div class="card" id="nbCard" hidden>
+        <h2>Nearest cases in the hypergraph</h2>
+        <div class="neighbours" id="neighbours"></div>
+        <p class="hint">Training/validation studies sharing this case's nearest-neighbour hyperedge —
+          the case-based evidence behind the hypergraph step.</p>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    API: <code>POST /api/predict</code> · <code>GET /api/model-card</code> · <code>GET /api/health</code>
+  </footer>
+</div>
+
+<script>
+(() => {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  let selectedFile = null;
+
+  // ---- theme ------------------------------------------------------------
+  const stored = (() => { try { return localStorage.getItem("dvlhg-theme"); } catch { return null; } })();
+  if (stored) document.documentElement.setAttribute("data-theme", stored);
+  $("theme").addEventListener("click", () => {
+    const dark = getComputedStyle(document.documentElement).colorScheme === "dark";
+    const next = dark ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", next);
+    try { localStorage.setItem("dvlhg-theme", next); } catch { /* private mode */ }
+  });
+
+  // ---- file selection ---------------------------------------------------
+  const drop = $("drop");
+  const accept = (file) => {
+    if (!file || !file.type.startsWith("image/")) { showError("That file is not an image."); return; }
+    selectedFile = file;
+    $("previewImg").src = URL.createObjectURL(file);
+    $("previewName").textContent = `${file.name} · ${(file.size / 1024).toFixed(0)} KB`;
+    $("preview").style.display = "block";
+    $("run").disabled = false;
+    showError(null);
+  };
+  drop.addEventListener("click", () => $("file").click());
+  drop.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); $("file").click(); } });
+  $("file").addEventListener("change", (e) => accept(e.target.files[0]));
+  ["dragenter", "dragover"].forEach((t) => drop.addEventListener(t, (e) => { e.preventDefault(); drop.classList.add("over"); }));
+  ["dragleave", "drop"].forEach((t) => drop.addEventListener(t, (e) => { e.preventDefault(); drop.classList.remove("over"); }));
+  drop.addEventListener("drop", (e) => accept(e.dataTransfer.files[0]));
+
+  $("clear").addEventListener("click", () => {
+    selectedFile = null;
+    $("file").value = ""; $("report").value = "";
+    $("preview").style.display = "none"; $("run").disabled = true;
+    $("findings").className = "empty";
+    $("findings").innerHTML = "Upload a film and press <strong>Analyse</strong>.";
+    $("meta").hidden = true;
+    ["saliencyCard", "textCard", "nbCard"].forEach((id) => { $(id).hidden = true; });
+    showError(null);
+  });
+
+  function showError(message) {
+    const box = $("error");
+    box.hidden = !message;
+    box.textContent = message || "";
+  }
+
+  // ---- analyse ----------------------------------------------------------
+  $("run").addEventListener("click", async () => {
+    if (!selectedFile) return;
+    const button = $("run");
+    button.disabled = true;
+    const label = button.textContent;
+    button.innerHTML = '<span class="spinner"></span> analysing';
+    showError(null);
+
+    const body = new FormData();
+    body.append("image", selectedFile);
+    body.append("report", $("report").value || "");
+    body.append("explain", $("explain").checked ? "true" : "false");
+    body.append("neighbours", "6");
+
+    try {
+      const response = await fetch("/api/predict", { method: "POST", body });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.detail || `HTTP ${response.status}`);
+      render(payload);
+    } catch (err) {
+      showError(String(err.message || err));
+    } finally {
+      button.disabled = false;
+      button.textContent = label;
+    }
+  });
+
+  const pct = (x) => `${(x * 100).toFixed(1)}%`;
+
+  function render(data) {
+    // findings
+    const host = $("findings");
+    host.className = "";
+    host.innerHTML = data.findings.map((f) => {
+      const flagged = f.flagged;
+      const delta = f.probability - f.without_hypergraph;
+      const arrow = Math.abs(delta) < 0.005 ? "" :
+        `<span title="change contributed by the hypergraph step">${delta > 0 ? "▲" : "▼"} ${pct(Math.abs(delta))}</span>`;
+      return `
+        <div class="finding">
+          <div class="top">
+            <span class="name">${f.label}</span>
+            <span>
+              <span class="pct">${pct(f.probability)}</span>
+              <span class="tag ${flagged ? "flag" : "clear"}">${flagged ? "above threshold" : "below threshold"}</span>
+            </span>
+          </div>
+          <div class="meter">
+            <div class="bar ${flagged ? "flag" : ""}" style="width:${Math.max(f.probability * 100, 1.2)}%"></div>
+            <div class="thr" style="left:${f.threshold * 100}%" title="operating threshold ${f.threshold}"></div>
+          </div>
+          <div class="meta">
+            <span>threshold ${f.threshold.toFixed(2)}</span>
+            <span>without hypergraph ${pct(f.without_hypergraph)} ${arrow}</span>
+          </div>
+        </div>`;
+    }).join("");
+
+    const gate = data.modality_gate;
+    $("meta").hidden = false;
+    $("meta").innerHTML =
+      `served variant <code>${data.serving_variant}</code> · ${data.latency_ms} ms · ` +
+      `modality gate ${gate.toFixed(2)} (1 = leaning on the film, 0 = on the report) · ` +
+      `text mode <code>${data.text_mode}</code>`;
+
+    // saliency
+    if (data.saliency) {
+      $("saliencyCard").hidden = false;
+      $("origImg").src = URL.createObjectURL(selectedFile);
+      $("camImg").src = data.saliency.overlay_png;
+      $("camCaption").textContent = `saliency for ${data.saliency.label}`;
+    } else { $("saliencyCard").hidden = true; }
+
+    // text attention
+    if (data.text_attention && data.text_attention.length) {
+      $("textCard").hidden = false;
+      $("textChips").innerHTML = data.text_attention.map((t) =>
+        `<span class="chip" style="opacity:${0.45 + 0.55 * t.weight}">${escapeHtml(t.token)}</span>`).join("");
+      $("textUsed").textContent = `Text actually used (${data.text_mode_description}): ${data.text_used}`;
+    } else { $("textCard").hidden = true; }
+
+    // neighbours
+    if (data.neighbours && data.neighbours.length) {
+      $("nbCard").hidden = false;
+      $("neighbours").innerHTML = data.neighbours.map((n) => `
+        <div class="nb">
+          <span class="sim">${n.similarity.toFixed(3)}</span>
+          <span class="badge">${n.split}${n.synthetic ? " · synthetic" : ""}</span>
+          <div class="f">${n.findings.map(escapeHtml).join(", ")}</div>
+        </div>`).join("");
+    } else { $("nbCard").hidden = true; }
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, (c) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  }
+
+  // ---- model card -------------------------------------------------------
+  (async () => {
+    try {
+      const response = await fetch("/api/model-card");
+      const card = await response.json();
+      if (!response.ok) throw new Error(card.detail || "unavailable");
+      const metrics = card.test_metrics || {};
+      const perClass = metrics.per_class || {};
+      const rows = Object.keys(perClass).map((name) => `
+        <tr><td>${escapeHtml(name)}</td>
+            <td class="num">${perClass[name].auroc.toFixed(3)}</td>
+            <td class="num">${perClass[name].f1.toFixed(3)}</td>
+            <td class="num">${card.thresholds[name].toFixed(2)}</td></tr>`).join("");
+      $("modelCard").className = "";
+      $("modelCard").innerHTML = `
+        <table class="card-table">
+          <thead><tr><th>Finding</th><th>AUROC</th><th>F1</th><th>Thr</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+        <p class="hint" style="margin-top:10px">
+          ${escapeHtml(card.data_source)} · backbone <code>${escapeHtml(card.vlm_backend)}</code> ·
+          text <code>${escapeHtml(card.text_mode)}</code> · ${card.bank_nodes} bank nodes ·
+          serving <code>${escapeHtml(card.serving_variant)}</code>
+        </p>
+        <p class="hint" style="margin-top:10px"><strong>Known limitations</strong></p>
+        <ul class="limits">${card.known_limitations.map((l) => `<li>${escapeHtml(l)}</li>`).join("")}</ul>`;
+      $("textHint").textContent =
+        `Paste the whole report — the server keeps only "${card.text_mode}" (${card.text_mode_description}).`;
+    } catch (err) {
+      $("modelCard").textContent = `Model card unavailable: ${err.message}`;
+    }
+  })();
+})();
+</script>
+</body>
+</html>

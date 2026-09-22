@@ -1,0 +1,25 @@
+# Core (Colab already has torch/torchvision with CUDA — do NOT reinstall torch there)
+torch>=2.1
+torchvision>=0.16
+numpy>=1.24
+pandas>=2.0
+scipy>=1.10
+scikit-learn>=1.3
+Pillow>=10.0
+pyyaml>=6.0
+tqdm>=4.65
+matplotlib>=3.7
+
+# Vision-language backbone
+open_clip_torch>=2.24
+transformers>=4.35
+timm>=0.9.12
+
+# Serving / frontend
+fastapi>=0.110
+uvicorn[standard]>=0.27
+python-multipart>=0.0.9
+
+# Optional (notebooks only)
+# pyngrok           # public URL for the Colab demo
+# torchmetrics      # FID for diffusion samples
